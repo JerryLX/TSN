@@ -3,6 +3,7 @@
 1. Simple Test
 
 ```bash
+cd ns-3.29
 ./build.sh
 ./do.sh
 ```
