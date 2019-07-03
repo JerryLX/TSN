@@ -73,6 +73,8 @@ public:
     ILLEGAL,     /**< Encapsulation mode not set */
     DIX,         /**< DIX II / Ethernet II packet */
     LLC,         /**< 802.2 LLC/SNAP Packet*/
+    IQDATA,
+    BG
   };
 
   /**

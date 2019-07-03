@@ -25,6 +25,7 @@
 #include "ns3/ptr.h"
 #include "ns3/nstime.h"
 #include "ns3/data-rate.h"
+#include "ns3/boolean.h"
 
 namespace ns3 {
 
@@ -200,7 +201,7 @@ public:
    * \return Returns true unless the source was detached before it
    * completed its transmission.
    */
-  bool TransmitEnd ();
+  bool TransmitEnd (uint32_t deviceId);
 
   /**
    * \brief Indicates that the channel has finished propagating the
@@ -209,7 +210,7 @@ public:
    * Calls the receive function of every active net device that is
    * attached to the channel.
    */
-  void PropagationCompleteEvent ();
+  void PropagationCompleteEvent (uint32_t deviceId);
 
   /**
    * \return Returns the device number assigned to a net device by the
@@ -224,7 +225,7 @@ public:
    * \return Returns the state of the channel (IDLE -- free,
    * TRANSMITTING -- busy, PROPAGATING - busy )
    */
-  WireState GetState ();
+  WireState GetState (uint32_t deviceId);
 
   /**
    * \brief Indicates if the channel is busy. The channel will only
@@ -233,7 +234,7 @@ public:
    * \return Returns true if the channel is busy and false if it is
    * free.
    */
-  bool IsBusy ();
+  bool IsBusy (uint32_t deviceId);
 
   /**
    * \brief Indicates if a net device is currently attached or
@@ -245,6 +246,14 @@ public:
    * channel, false otherwise.
    */
   bool IsActive (uint32_t deviceId);
+
+  /**
+   * \brief Indicates if channel is operating in full duplex mode.
+   *
+   * \return Returns true if channel is in full duplex mode, false if in
+   * half duplex mode.
+   */
+  bool IsFullDuplex (void) const;
 
   /**
    * \return Returns the number of net devices that are currently
@@ -319,6 +328,11 @@ private:
   Time          m_delay;
 
   /**
+   * Whether the channel is in full duplex mode
+   */
+  bool          m_fullDuplex;
+
+  /**
    * List of the net devices that have been or are currently connected
    * to the channel.
    *
@@ -336,19 +350,72 @@ private:
    * packet to have been transmitted on the channel if the channel is
    * free.)
    */
-  Ptr<Packet> m_currentPkt;
+  Ptr<Packet> m_currentPkt[2];
 
   /**
    * Device Id of the source that is currently transmitting on the
    * channel. Or last source to have transmitted a packet on the
    * channel, if the channel is currently not busy.
    */
-  uint32_t                            m_currentSrc;
+  uint32_t m_currentSrc[2];
 
   /**
    * Current state of the channel
    */
-  WireState          m_state;
+  WireState m_state[2];
+
+  /**
+   * \brief Gets current packet
+   *
+   * \param deviceId The ID that was assigned to the net device when
+   * it was attached to the channel.
+   *
+   * \return Device Id of the source that is currently transmitting on the
+   * channel. Or last source to have transmitted a packet on the
+   * channel, if the channel is currently not busy.
+   */
+  Ptr<Packet> GetCurrentPkt (uint32_t deviceId);
+
+  /**
+   * \brief Sets the current packet
+   *
+   * \param deviceId The ID that was assigned to the net device when
+   * it was attached to the channel.
+   * \param The Packet that is current being transmitted by deviceId (or last
+   * packet to have been transmitted on the channel if the channel is free.)
+   */
+  void SetCurrentPkt (uint32_t deviceId, Ptr<const Packet> pkt);
+
+  /**
+   * \brief Gets current transmitter
+   *
+   * \param deviceId The ID that was assigned to the net device when
+   * it was attached to the channel.
+   *
+   * \return Device Id of the source that is currently transmitting on the
+   * channel. Or last source to have transmitted a packet on the
+   * channel, if the channel is currently not busy.
+   */
+  uint32_t GetCurrentSrc (uint32_t deviceId);
+
+  /**
+   * \brief Sets the current transmitter
+   *
+   * \param deviceId The ID that was assigned to the net device when
+   * it was attached to the channel.
+   * \param transmitterId The ID of the transmitting device.
+   */
+  void SetCurrentSrc (uint32_t deviceId, uint32_t transmitterId);
+
+  /**
+   * \brief Sets the state of the channel
+   *
+   * \param deviceId The ID that was assigned to the net device when
+   * it was attached to the channel.
+   * \param state The new channel state.
+   */
+  void SetState (uint32_t deviceId, WireState state);
+
 };
 
 } // namespace ns3

@@ -22,6 +22,7 @@
 #include "ns3/queue.h"
 #include "ns3/simulator.h"
 #include "ns3/ethernet-header.h"
+#include "ns3/vlan-header.h"
 #include "ns3/ethernet-trailer.h"
 #include "ns3/llc-snap-header.h"
 #include "ns3/error-model.h"
@@ -62,7 +63,9 @@ CsmaNetDevice::GetTypeId (void)
                    EnumValue (DIX),
                    MakeEnumAccessor (&CsmaNetDevice::SetEncapsulationMode),
                    MakeEnumChecker (DIX, "Dix",
-                                    LLC, "Llc"))
+                                    LLC, "Llc",
+                                    IQDATA, "Iqdata",
+                                    BG, "Bg"))
     .AddAttribute ("SendEnable", 
                    "Enable or disable the transmitter section of the device.",
                    BooleanValue (true),
@@ -346,9 +349,10 @@ CsmaNetDevice::AddHeader (Ptr<Packet> p,   Mac48Address source,  Mac48Address de
 {
   NS_LOG_FUNCTION (p << source << dest << protocolNumber);
 
-  EthernetHeader header (false);
+  VlanHeader header;
   header.SetSource (source);
   header.SetDestination (dest);
+  header.SetPriority(0);
 
   EthernetTrailer trailer;
 
@@ -419,6 +423,17 @@ CsmaNetDevice::AddHeader (Ptr<Packet> p,   Mac48Address source,  Mac48Address de
     default:
       NS_FATAL_ERROR ("CsmaNetDevice::AddHeader(): Unknown packet encapsulation mode");
       break;
+    case IQDATA:
+      {
+         lengthType = 33024;
+         header.SetPriority(7);
+      }
+      break;
+    case BG:
+      {
+         lengthType = 33024;
+      }
+      break;
     }
 
   NS_LOG_LOGIC ("header.SetLengthType (" << lengthType << ")");
@@ -485,6 +500,7 @@ CsmaNetDevice::TransmitStart (void)
 
   NS_LOG_LOGIC ("m_currentPkt = " << m_currentPkt);
   NS_LOG_LOGIC ("UID = " << m_currentPkt->GetUid ());
+  NS_LOG_LOGIC ("Device ID = " << m_deviceId);
 
   //
   // Only transmit if the send side of net device is enabled
@@ -509,31 +525,38 @@ CsmaNetDevice::TransmitStart (void)
   // Now we have to sense the state of the medium and either start transmitting
   // if it is idle, or backoff our transmission if someone else is on the wire.
   //
-  if (m_channel->GetState () != IDLE)
+  if (m_channel->GetState (m_deviceId) != IDLE)
     {
       //
       // The channel is busy -- backoff and rechedule TransmitStart() unless
       // we have exhausted all of our retries.
       //
-      m_txMachineState = BACKOFF;
 
-      if (m_backoff.MaxRetriesReached ())
+      if (m_channel->IsFullDuplex ())
         { 
-          //
-          // Too many retries, abort transmission of packet
-          //
-          TransmitAbort ();
+          NS_LOG_LOGIC ("Channel busy!");
         } 
       else 
         {
-          m_macTxBackoffTrace (m_currentPkt);
+          m_txMachineState = BACKOFF;
+          if (m_backoff.MaxRetriesReached ())
+            {
+              //
+              // Too many retries, abort transmission of packet
+              //
+              TransmitAbort ();
+            }
+          else
+            {
+              m_macTxBackoffTrace (m_currentPkt);
 
-          m_backoff.IncrNumRetries ();
-          Time backoffTime = m_backoff.GetBackoffTime ();
+              m_backoff.IncrNumRetries ();
+              Time backoffTime = m_backoff.GetBackoffTime ();
 
-          NS_LOG_LOGIC ("Channel busy, backing off for " << backoffTime.GetSeconds () << " sec");
+              NS_LOG_LOGIC ("Channel busy, backing off for " << backoffTime.GetSeconds () << " sec");
 
-          Simulator::Schedule (backoffTime, &CsmaNetDevice::TransmitStart, this);
+              Simulator::Schedule (backoffTime, &CsmaNetDevice::TransmitStart, this);
+            }
         }
     } 
   else 
@@ -622,7 +645,7 @@ CsmaNetDevice::TransmitCompleteEvent (void)
   // the transmitter after the interframe gap.
   //
   NS_ASSERT_MSG (m_txMachineState == BUSY, "CsmaNetDevice::transmitCompleteEvent(): Must be BUSY if transmitting");
-  NS_ASSERT (m_channel->GetState () == TRANSMITTING);
+  NS_ASSERT (m_channel->GetState (m_deviceId) == TRANSMITTING);
   m_txMachineState = GAP;
 
   //
@@ -633,7 +656,7 @@ CsmaNetDevice::TransmitCompleteEvent (void)
   NS_LOG_LOGIC ("m_currentPkt=" << m_currentPkt);
   NS_LOG_LOGIC ("Pkt UID is " << m_currentPkt->GetUid () << ")");
 
-  m_channel->TransmitEnd (); 
+  m_channel->TransmitEnd (m_deviceId); 
   m_phyTxEndTrace (m_currentPkt);
   m_currentPkt = 0;
 
@@ -688,6 +711,8 @@ CsmaNetDevice::Attach (Ptr<CsmaChannel> ch)
 
   m_deviceId = m_channel->Attach (this);
 
+  NS_LOG_LOGIC ("Device ID is " << m_deviceId);
+
   //
   // The channel provides us with the transmitter data rate.
   //
@@ -724,6 +749,7 @@ CsmaNetDevice::Receive (Ptr<Packet> packet, Ptr<CsmaNetDevice> senderDevice)
 {
   NS_LOG_FUNCTION (packet << senderDevice);
   NS_LOG_LOGIC ("UID is " << packet->GetUid ());
+  NS_LOG_LOGIC ("Device ID is " << m_deviceId);
 
   //
   // We never forward up packets that we sent.  Real devices don't do this since
@@ -777,7 +803,7 @@ CsmaNetDevice::Receive (Ptr<Packet> packet, Ptr<CsmaNetDevice> senderDevice)
       return;
     }
 
-  EthernetHeader header (false);
+  VlanHeader header;
   packet->RemoveHeader (header);
 
   NS_LOG_LOGIC ("Pkt source is " << header.GetSource ());
@@ -985,6 +1011,7 @@ CsmaNetDevice::SendFrom (Ptr<Packet> packet, const Address& src, const Address& 
   NS_LOG_FUNCTION (packet << src << dest << protocolNumber);
   NS_LOG_LOGIC ("packet =" << packet);
   NS_LOG_LOGIC ("UID is " << packet->GetUid () << ")");
+  NS_LOG_LOGIC ("Device ID is " << m_deviceId);
 
   NS_ASSERT (IsLinkUp ());
 
