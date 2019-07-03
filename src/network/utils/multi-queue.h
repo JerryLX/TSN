@@ -104,7 +104,7 @@ MultiQueue::Dequeue (void)
 bool 
 MultiQueue::IsEmpty ()
 {
-  for(int i = 0; i < m_queueAmount; i++)
+  for(uint8_t i = 0; i < m_queueAmount; i++)
     if(!m_multiQueue[i].IsEmpty())
       return false;
   return true;
@@ -121,7 +121,7 @@ MultiQueue::ChooseQueueForEnqueue (Ptr<Packet> packet)
 int
 MultiQueue::ChooseQueueForDequeue (void)
 {
-  for(int i = m_queueAmount - 1; i >= 0; i--)
+  for(uint8_t i = m_queueAmount - 1; i >= 0; i--)
     if(!m_multiQueue[i].IsEmpty())
       return i;
   return -1;
