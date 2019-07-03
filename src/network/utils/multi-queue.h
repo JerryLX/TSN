@@ -17,7 +17,7 @@ namespace ns3 {
  * Different queues represent as different priority.
  */
 
-class MultiQueue : public Queue<Packet>
+class MultiQueue
 {
 public:
   /**
