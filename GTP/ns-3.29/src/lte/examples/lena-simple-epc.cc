@@ -29,6 +29,9 @@
 #include "ns3/applications-module.h"
 #include "ns3/point-to-point-helper.h"
 #include "ns3/config-store.h"
+#include <ns3/flow-monitor.h>
+#include <ns3/flow-monitor-helper.h>
+#include "ns3/bulk-send-application.h"
 
 #include <iostream>
 #include <fstream>
@@ -48,14 +51,19 @@ int total_size = 0;
 int total_payload = 0;
 int packet_num_merged = 0;
 int packet_num_split = 0;
+int packet_num_sgw = 0;
+int packet_num_sgw2 = 0;
+
+double time_sgw = 0;
+double time_sgw2 = 0;
 
 void RxFromS1uTracer(Ptr<Packet> p)
 {
   std::ofstream outfile;
   outfile.open("merged_packet.txt", std::ios::app);
-  outfile << Simulator::Now().GetSeconds() << "  idx: " << packet_num_merged << "  size: " << p->GetSize() << std::endl;
+  outfile << Simulator::Now().GetSeconds() << "  idx: " << packet_num_merged << "  size: " << p->GetSize() + 28<< std::endl;
   outfile.close();
-  total_size += p->GetSize();
+  total_size += p->GetSize() + 28;
   packet_num_merged++;
 }
 
@@ -65,16 +73,53 @@ void RxFromS1uTracer_split(Ptr<Packet> p)
   outfile.open("split_packet.txt", std::ios::app);
   outfile << Simulator::Now().GetSeconds() << "  idx: " << packet_num_split << "  size: " << p->GetSize() << std::endl;
   outfile.close();
-  total_payload += p->GetSize() - 28;
+  total_payload += p->GetSize();
   packet_num_split++;
 }
 
+void TxSGWS1uTracer(Ptr<Packet> p)
+{
+  std::ofstream outfile;
+  outfile.open("sgw_packet.txt", std::ios::app);
+  time_sgw += double(Simulator::Now().GetSeconds());
+  outfile << Simulator::Now().GetSeconds() << "  idx: " << packet_num_sgw << "  size: " << p->GetSize() << std::endl;
+  outfile.close();
+  packet_num_sgw++;
+}
+
+/* void TxSGWS1uTracer2(Ptr<Packet> p)
+{
+  std::ofstream outfile;
+  outfile.open("sgw_packet2.txt", std::ios::app);
+  outfile << Simulator::Now().GetSeconds() << "  idx: " << packet_num_sgw << "  size: " << p->GetSize()<<std::endl;
+  outfile.close();
+  packet_num_sgw2++;
+}
+ */
+
+double compute_time_cost2() 
+{
+    std::ifstream infile;  
+	infile.open("tmp.txt", std::ios::in);
+	double time = 0;
+	uint16_t merge_num = 0;
+	while (infile >> time >> merge_num)
+	{
+		time_sgw2 += time * merge_num;
+		packet_num_sgw2 += merge_num;
+	}
+	infile.close();
+	return ((time_sgw2/packet_num_sgw2)-(time_sgw/packet_num_sgw));
+}
+ 
+ 
 void PrintResult()
 {
-  //std::cout<<"packet_count  :  "<<packet_count<<std::endl;
-  std::cout<<"total_payload :  "<<total_payload<<std::endl;
-  std::cout<<"total_size    :  "<<total_size<<std::endl;
+  std::cout<<"packet_count  :  "<<packet_num_split * 6 << "M" << std::endl;
+  std::cout<<"Total Payload :  "<<total_payload * 6<< "MBytes " <<std::endl;
+  std::cout<<"Total Size    :  "<<total_size * 6 << "MBytes " <<std::endl;
   std::cout<<"Bandwidth Usage: "<<double(total_payload)/double(total_size)<<std::endl;
+  // std::cout<<"Average Time Cost: "<<compute_time_cost2()<<std::endl;
 }
 
 
@@ -82,9 +127,10 @@ int
 main (int argc, char *argv[])
 {
 
-  uint16_t numberOfNodes = 2;
-  double simTime = 1;
-  double distance = 60.0;
+  uint16_t numberOfNodes = 1;
+  double simTime = 5;
+  //double distance = 60.0;
+  double distance = 0;
   double interPacketInterval = 100;
   bool useCa = false;
 
@@ -125,9 +171,9 @@ main (int argc, char *argv[])
 
   // Create the Internet
   PointToPointHelper p2ph;
-  p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));
+  p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("10Mb/s")));
   p2ph.SetDeviceAttribute ("Mtu", UintegerValue (1500));
-  p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));
+  p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0)));
   NetDeviceContainer internetDevices = p2ph.Install (pgw, remoteHost);
   Ipv4AddressHelper ipv4h;
   ipv4h.SetBase ("1.0.0.0", "255.0.0.0");
@@ -187,31 +233,60 @@ main (int argc, char *argv[])
   uint16_t otherPort = 3000;
   ApplicationContainer clientApps;
   ApplicationContainer serverApps;
+
+
+  
   for (uint32_t u = 0; u < ueNodes.GetN (); ++u)
     {
       ++ulPort;
       ++otherPort;
-      PacketSinkHelper dlPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), dlPort));
+      PacketSinkHelper dlPacketSinkHelper ("ns3::TcpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), dlPort));
     serverApps.Add (dlPacketSinkHelper.Install (ueNodes.Get(u)));
+	
+//	  OnOffHelper source ("ns3::TcpSocketFactory",
+  //                       InetSocketAddress(ueIpIface.GetAddress(u), dlPort));
+  // Set the amount of data to send in bytes.  Zero is unlimited.
+  //    source.SetAttribute ("MaxBytes", UintegerValue (1000000000));
+//	  source.SetAttribute ("DataRate", DataRateValue (DataRate ("10Mb/s")));
+	//  source.SetAttribute ("PacketSize", UintegerValue (36));
+	  //source.SetAttribute ("OnTime", RandomVariableValue (ConstantVariable (1)));
+      //source.SetAttribute ("OffTime", RandomVariableValue (ConstantVariable (0)));
 
-      UdpClientHelper dlClient (ueIpIface.GetAddress (u), dlPort);
+      //ApplicationContainer sourceApps = source.Install (remoteHost);
+	
+	
+
+       UdpClientHelper dlClient (ueIpIface.GetAddress (u), dlPort);
       dlClient.SetAttribute ("Interval", TimeValue (MicroSeconds(interPacketInterval)));
       dlClient.SetAttribute ("MaxPackets", UintegerValue(1000000000));
-      dlClient.SetAttribute ("PacketSize", UintegerValue(12));
+      dlClient.SetAttribute ("PacketSize", UintegerValue(36)); 
+	  	  clientApps.Add (dlClient.Install (remoteHost));
+	  
 
-      // UdpClientHelper dlClient2 (ueIpIface.GetAddress (u), dlPort);
-      // dlClient2.SetAttribute ("Interval", TimeValue (MicroSeconds(interPacketInterval)));
-      // dlClient2.SetAttribute ("MaxPackets", UintegerValue(1000000000));
-      // dlClient2.SetAttribute ("PacketSize", UintegerValue(1024));
 
-      clientApps.Add (dlClient.Install (remoteHost));
-      // clientApps.Add (dlClient2.Install (remoteHost));
+/*        UdpClientHelper dlClient2 (ueIpIface.GetAddress (u), dlPort);
+      dlClient2.SetAttribute ("Interval", TimeValue (MicroSeconds(interPacketInterval*4)));
+      dlClient2.SetAttribute ("MaxPackets", UintegerValue(1000000000));
+      dlClient2.SetAttribute ("PacketSize", UintegerValue(228));
+      clientApps.Add (dlClient2.Install (remoteHost));  */
+      
+
+
     }
   serverApps.Start (MilliSeconds (1));
   clientApps.Start (MilliSeconds (1));
 
-  Config::ConnectWithoutContext("/NodeList/2/ApplicationList/*/RxFromS1u", MakeCallback(&RxFromS1uTracer));
-  Config::ConnectWithoutContext("/NodeList/2/ApplicationList/*/RxFromS1u_split", MakeCallback(&RxFromS1uTracer_split));
+  Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/RxFromS1u", MakeCallback(&RxFromS1uTracer));
+  Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/RxFromS1u_split", MakeCallback(&RxFromS1uTracer_split));
+
+  Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/RxFromTun", MakeCallback(&TxSGWS1uTracer));
+  // Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/RxFromTun2", MakeCallback(&TxSGWS1uTracer2));
+
+  Ptr<FlowMonitor> flowMonitor;
+  FlowMonitorHelper flowHelper;
+  flowMonitor = flowHelper.InstallAll();
+  
+  lteHelper->EnableTraces();
   Simulator::Stop(Seconds(simTime));
   Simulator::Run();
 
@@ -221,6 +296,7 @@ main (int argc, char *argv[])
   Simulator::Destroy();
 
   PrintResult();
+  flowMonitor->SerializeToXmlFile("tsn.xml", true, true);
   return 0;
 
 }

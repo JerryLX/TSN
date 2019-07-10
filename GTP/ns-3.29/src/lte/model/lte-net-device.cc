@@ -286,7 +286,7 @@ LteNetDevice::Receive (Ptr<Packet> p)
 {
   NS_LOG_FUNCTION (this << p);
   uint8_t ipType;
-
+  
   p->CopyData (&ipType, 1);
   ipType = (ipType>>4) & 0x0f;
 

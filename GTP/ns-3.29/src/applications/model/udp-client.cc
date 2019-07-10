@@ -201,6 +201,9 @@ UdpClient::Send (void)
       NS_LOG_INFO ("Error while sending " << m_size << " bytes to "
                                           << peerAddressStringStream.str ());
     }
+  double time_remote_host = 0;
+  time_remote_host += double(Simulator::Now().GetSeconds());
+  std::cout<<"time_remote_host  " << time_remote_host<<std::endl;
 
   if (m_sent < m_count)
     {

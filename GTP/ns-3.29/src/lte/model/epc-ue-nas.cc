@@ -23,6 +23,7 @@
 
 #include <ns3/epc-helper.h>
 
+
 #include "lte-enb-net-device.h"
 #include "epc-ue-nas.h"
 #include "lte-as-sap.h"
@@ -254,6 +255,10 @@ void
 EpcUeNas::DoRecvData (Ptr<Packet> packet)
 {
   NS_LOG_FUNCTION (this << packet);
+  // printf("UE Receive\n");
+  double time_ue = 0;
+  time_ue += double(Simulator::Now().GetSeconds());
+  std::cout<<"time_ue  " << time_ue<<std::endl;
   m_forwardUpCallback (packet);
 }
 

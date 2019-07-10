@@ -53,10 +53,10 @@ GtpNewHeader::GetInstanceTypeId (void) const
 uint32_t
 GtpNewHeader::GetSerializedSize (void) const
 {
-  if (m_version == 3 && m_teidFlag) return 12;
-  else if (m_version == 3 && !m_teidFlag) return 8;
-  else if (m_version == 4 && m_teidFlag) return 11;
-  else return 7;
+  if (m_version == 3 && m_teidFlag) return 9;
+  else if (m_version == 3 && !m_teidFlag) return 5;
+  else if (m_version == 4 && m_teidFlag) return 8;
+  else return 4;
 }
 void
 GtpNewHeader::Serialize (Buffer::Iterator start) const
@@ -65,13 +65,13 @@ GtpNewHeader::Serialize (Buffer::Iterator start) const
   uint8_t firstByte = m_version << 5 | m_protocolType << 4 | m_extensionHeaderFlag << 3;
   firstByte |= m_sequenceNumberFlag << 2 | m_nPduNumberFlag << 1 | m_teidFlag;
   i.WriteU8 (firstByte);
-  i.WriteU8 (m_length);
+  i.WriteHtonU16 (m_length);
   if (m_version == 3) i.WriteU8 (m_messageType);
   if (m_teidFlag) i.WriteHtonU32 (m_teid);
   i.WriteU8 (m_teidHashValue);
-  i.WriteHtonU16 (m_sequenceNumber);
-  i.WriteU8 (m_nPduNumber);
-  i.WriteU8 (m_nextExtensionType);
+ // i.WriteHtonU16 (m_sequenceNumber);
+ // i.WriteU8 (m_nPduNumber);
+ // i.WriteU8 (m_nextExtensionType);
 
 }
 uint32_t
@@ -86,13 +86,13 @@ GtpNewHeader::Deserialize (Buffer::Iterator start)
   m_nPduNumberFlag = firstByte >> 1 & 0x1;
   m_teidFlag = firstByte & 0x1;
 
-  m_length = i.ReadU8 ();
+  m_length = i.ReadNtohU16 ();
   if (m_version == 3) m_messageType = i.ReadU8 ();
   if (m_teidFlag) m_teid = i.ReadNtohU32 ();
   m_teidHashValue = i.ReadU8 ();
-  m_sequenceNumber = i.ReadNtohU16 ();
-  m_nPduNumber = i.ReadU8 ();
-  m_nextExtensionType = i.ReadU8 ();
+  //m_sequenceNumber = i.ReadNtohU16 ();
+  //m_nPduNumber = i.ReadU8 ();
+  //m_nextExtensionType = i.ReadU8 ();
   return GetSerializedSize ();
 }
 void
@@ -119,7 +119,7 @@ GtpNewHeader::Print (std::ostream &os) const
     {
       os << " T ";
     }
-  os << "], messageType=" << (uint32_t) m_messageType << ", length=" << (uint32_t) m_length;
+  os << "], messageType=" << (uint32_t) m_messageType << ", length=" << (uint16_t) m_length;
   os << ", teid=" << (uint32_t) m_teid << ", sequenceNumber=" << (uint32_t) m_sequenceNumber;
   os << ", nPduNumber=" << (uint32_t) m_nPduNumber << ", nextExtensionType=" << (uint32_t) m_nextExtensionType;
 }
@@ -130,7 +130,7 @@ GtpNewHeader::GetExtensionHeaderFlag () const
   return m_extensionHeaderFlag;
 }
 
-uint8_t
+uint16_t
 GtpNewHeader::GetLength () const
 {
   return m_length;
@@ -209,7 +209,7 @@ GtpNewHeader::SetExtensionHeaderFlag (bool m_extensionHeaderFlag)
 }
 
 void
-GtpNewHeader::SetLength (uint8_t m_length)
+GtpNewHeader::SetLength (uint16_t m_length)
 {
   this->m_length = m_length;
 }

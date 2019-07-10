@@ -30,6 +30,9 @@
 
 #include "epc-gtpu-header.h"
 #include "eps-bearer-tag.h"
+#include <time.h>
+#include "ns3/udp-header.h"
+#include "ns3/ipv4-header.h"
 #define GtpuHeader GtpNewHeader
 
 namespace ns3 {
@@ -290,47 +293,49 @@ EpcEnbApplication::RecvFromLteSocket (Ptr<Socket> socket)
 void
 EpcEnbApplication::RecvFromS1uSocket (Ptr<Socket> socket)
 {
+  srand((int)time(0));
+  if ((rand()%10) < 1)
+  {
+	  return;
+  }
   NS_LOG_FUNCTION (this << socket);
   NS_ASSERT (socket == m_s1uSocket);
   Ptr<Packet> packet = socket->Recv ();
-  // printf("send_trace   %d", packet->GetSize());
+    //printf("receive   %d\n", packet->GetSize());
+     Ipv4Header ipv4;
+   packet->RemoveHeader(ipv4);
+     UdpHeader udp;
+   packet->RemoveHeader(udp);
+
+  //printf("after remove   %d\n", packet->GetSize());
   m_rxS1uSocketPktTrace(packet->Copy());
 
   //拆包
   uint32_t totalLength = packet->GetSize();
-  // uint32_t start = 0;
-  // Ptr<Packet> copyPacket = packet->Copy();
   Ptr<Packet> subPacket;
-  GtpuHeader gtpu;
-  while (true) {
-
+  GtpNewHeader gtpu;
+  while (true) {  
     packet->RemoveHeader(gtpu);
-
-    uint8_t m_version = gtpu.GetVersion();
     bool m_teidFlag = gtpu.GetTeidFlag();
-    uint8_t shift = 0;
-    if (m_version == 3 && m_teidFlag) shift =  12;
-    else if (m_version == 3 && !m_teidFlag) shift = 8;
-    else if (m_version == 4 && m_teidFlag) shift = 11;
-    else shift = 7;
+
     uint32_t teid;
-    uint8_t teidhs = gtpu.GetTeidHashValue();;
+    uint8_t teidhs = gtpu.GetTeidHashValue();
+
     if (m_teidFlag){
         teid = gtpu.GetTeid();
+        //std::cout<<"TEID:"<<teid<<std::endl;
         TEID_map[teidhs] = teid;
     }else{
         teid = TEID_map[teidhs];
     }
-    uint32_t gtpuLength = gtpu.GetLength();
 
-    subPacket = packet->CreateFragment(0, gtpuLength - shift);
+    uint16_t gtpuLength = gtpu.GetLength();          
+    subPacket = packet->CreateFragment(0, gtpuLength);
 
-    packet->RemoveAtStart(gtpuLength - shift);
-
+    packet->RemoveAtStart(gtpuLength);
     totalLength = packet->GetSize();
-    packet = packet->CreateFragment(0,totalLength);
 
-    // subPacket->RemoveHeader(gtpu);
+    packet = packet->CreateFragment(0,totalLength);
     ///////////uint32_t teid = gtpu.GetTeid ();///////////////
 
     std::map<uint32_t, EpsFlowId_t>::iterator it = m_teidRbidMap.find (teid);
@@ -342,13 +347,7 @@ EpcEnbApplication::RecvFromS1uSocket (Ptr<Socket> socket)
   }
 
 }
-// GtpuHeader gtpu;
-// uint32_t teid = gtpu.GetTeid ();
-//   std::map<uint32_t, EpsFlowId_t>::iterator it = m_teidRbidMap.find (teid);
-//   NS_ASSERT (it != m_teidRbidMap.end ());
 
-//   m_rxS1uSocketPktTrace (packet->Copy ());
-//   SendToLteSocket (packet, it->second.m_rnti, it->second.m_bid);
 
 void
 EpcEnbApplication::SendToLteSocket (Ptr<Packet> packet, uint16_t rnti, uint8_t bid)

@@ -147,7 +147,7 @@ PointToPointEpcHelper::GetTypeId (void)
     .AddConstructor<PointToPointEpcHelper> ()
     .AddAttribute ("S1uLinkDataRate", 
                    "The data rate to be used for the next S1-U link to be created",
-                   DataRateValue (DataRate ("1Mb/s")),
+                   DataRateValue (DataRate ("100Mb/s")),
                    MakeDataRateAccessor (&PointToPointEpcHelper::m_s1uLinkDataRate),
                    MakeDataRateChecker ())
     .AddAttribute ("S1uLinkDelay", 
